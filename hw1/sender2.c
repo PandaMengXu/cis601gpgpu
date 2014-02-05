@@ -30,16 +30,6 @@ void main()
     struct flock fd_fill_lock;
     char buffer = 0;
 
-/*    fd_empty = open("fd_empty.tmp", O_RDWR);
-    fd_fill = open("fd_fill.tmp", O_RDWR);
-    fd_bit = open("fd_bit.tmp", O_RDWR);
-
-    if(fd_empty <= 0 || fd_fill <= 0 || fd_bit <= 0)
-    {   
-        fprintf(stderr, "Open file fails, exit(1)\n");
-        exit(1);
-    }
-*/
     while(1)
     {
         buffer = get_rand_char();
@@ -49,17 +39,11 @@ void main()
                 bit = 0;
             else
                 bit = 1;
-//            while(is_locked(fd_empty, &fd_empty_lock_flag) == true);
             while(is_file_exist(fd_empty_name) == true);
-//      {
-//      printf("wait fd_empty release lock\n");
-//      }
-//            lock_file(fd_empty, &fd_empty_lock_flag);
             create_file(fd_empty_name);
 
             if( bit == 1)
             {
-//                set_bit(fd_bit);
                 create_file(fd_bit_name);
             }else{
                 remove_file(fd_bit_name);
@@ -68,10 +52,9 @@ void main()
             j = (j++) % 4;
             if( j == 0 )
             {
-                printf(" ");
+                printf("\n");
                 fflush(stdout);
             }
-//            unlock_file(fd_fill, &fd_fill_lock_flag);
             remove_file(fd_fill_name);
         }       
     }

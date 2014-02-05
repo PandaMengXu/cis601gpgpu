@@ -50,6 +50,8 @@ static inline int is_file_exist(char* filename)
     }
 }
 
+#ifdef  NOT_DELETE
+
 /*Lock the file and flag unconditionally unless fails in the fcntl()*/
 static inline int lock_file(int fd, int *fd_lock_flag)
 {
@@ -192,6 +194,6 @@ static inline int clear_bit(int fd)
             fprintf(stderr, "Cannot clear bit for fd_bit\n");
     }
 }
-
+#endif
 
 #endif
