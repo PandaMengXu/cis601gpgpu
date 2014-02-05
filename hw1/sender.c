@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <assert.h>
+#include <inttypes.h>
 
 #define ARRAY_LENGTH            (4096 + 8)
 #define ARRAY_EFFECTIVE_LENGTH  4096
@@ -49,9 +50,10 @@ void main()
     unsigned long* array = NULL;
     int set = 0, line = 0, k = 0;
     int start = 0, end = 0;
-    int try = 0, i = 0;
+    int try = 0, i = 0, j = 0;
     int bit = 0;
-    unsigned int buffer = 0;
+    uint32_t buffer = 0;
+    int send_times = 3;
     
     
     /* Test: unsigned long must be 64bit*/
@@ -88,15 +90,17 @@ void main()
     }
     printf("Sender send %d bits data:%#010x\n", BITS_WIDTH, buffer);
     
-    sleep(2);
-    for( i = 0; i < BITS_WIDTH; i++ )
-    {
-        if( buffer & (0x1 << i)) /*i^th bit is 1*/
-            send_bit_1(i, array);
-        else
-            send_bit_0(i, array);
-    }
-
+    sleep(1);
+    for( j = 0; j < send_times; j++)
+	{
+		for( i = 0; i < BITS_WIDTH; i++ )
+		{
+			if( buffer & ( 0x1 << i )) /*i^th bit is 1*/
+				send_bit_1(i, array);
+			else
+				send_bit_0(i, array);
+		}
+	}
     printf("Finish sending\n");
     free(array);
 }
