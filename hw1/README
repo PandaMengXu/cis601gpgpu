@@ -1,14 +1,71 @@
-receiver.c
+==================
+CIS601 HW1
+Meng Xu
+mengxu@cis.upenn.edu
+Feb. 5th, 2013
+==================
+Design Goal
+Build a covert channel on multicore using implicitly shared resource
+---
+Design
+I tried the following methods to desgin the covert channel:
+
+1) Use the L1 Data cache as the covert channel as discussed in class. 
+    (file: sender.c, receiver.c)
+    Each set is encoded as a bit; 
+    receiver.c does the following: a) loads a large array that occupies the whole L1 data cache and measures the miss latency; b) load the array again to get the hit latency c) reads the set with even set index (to avoid prefetch effect) and measures the latency; d) if it is larger than the hit latency, it treated it as bit 1 transferred; otherwise, it is bit 0 transferred. 
+    Because L1 data cache has 64 sets and we only use the set with even index, so we should be able to send 32 bits at one time.
+    sender.c does the following: a) create a large array that can occupy the whole L1 data cache but does not load the data; b) when it wants to send a bit 1 at index i, it will pollute the (2*i)^th set's content by loading the data into the corresponding elements of its array. c) when it wants to send a bit 0 at index j, it does nothing. 
+    In order to make sure sender.c and receiver.c can load the data into the exact set, we create an array larger than the L1 data cache first and then move the pointer to the address which is alligned with a set. We use the modified pointer as the start of the array.
+
+    Result: This method should work in theory, but does not work in practice. The reason is that the latency difference of hit and miss is very small (around 1us), but the variance of the hit is around 2us; Therefore, it is hard to distinguish if it is a miss or just a variance of a hit. 
+
+    Analysis: The reasons why it does not work may be because the latency of cache miss of one set is too small to tell. Therefore, I use the method 2) to try to solve it.
+
+---
+2) Use the miss/hit of the whole L1 data cache to encode 1 bit. Use time division to synchronize the sender and receiver.
+    (file: sender3.c receiver3.c)
+    The cache miss of the whole L1 data cache is at least twice than the time of cache hit of the whole L1 data cache. 
+    receiver3.c does the following: a) loads a large array that occupies the whole L1 data cache and measure the miss latency; b) loads the array again to load the hit latency; c) sleep for 2 seconds; d) Inside the loop: load the whole array and measure the time, then sleep for 2 seconds. 
+    sender3.c does the following: a) sleep for 1 second to allow the receiver3.c to load receiver's array to L1 data cache; b) Inside the loop: send one bit and sleep for 2 seconds;
+    To sum up the synchronization: receiver3 uses the time slot [0s, 1s], [2s,3s],...,[2i, (2i+2)s]; sender3 uees the time slot [1s, 2s], [3s, 4s],...,[(2i+1)s, (2i+2)s]. Because it only takes less than 100us to load the whole L1 data cache, the clock drift will not be so severe. 
+
+    Result: This method does not work. Because sender3 cannot interfer the receiver3 and make it have longer latency when sender3 polutes the cache.  
+    I also used different ways to polute the cache of receiver3:
+    a) sender3.c use the same array access pattern as receiver3 has to polute the cache, reciever3's latency does not change.
+    b) I use polute.c to *always* load a large array while receiver3 is running. receiver3's latency is REDUCED! (This is the most weird thing I saw.)
+    c) I allign the array to page, the latency of receiver3's loading whole L1 data cache does NOT change.
+
+    Analysis: I am still confused why the receiver3's cache latency does not change. I also changed the code to let receiver3 access the array[0] for 100 times and measures the latency of accessing array[0] each time. The weird thing is that the latency is around 50 cycles! Based on the document online, the latency to access one L1 cache line should be around 4 cycle, and the latency to access one L2 cache line is around 10 cycle. 
+    I use __asm__ __volatile__ ("rdtsc" : "=a"(lo), "=d"(hi)); to get the timestamp.  This code should have very low overhead since it has only one instruction. When I access the whole 512 cache lines and only measure the latency once, the latency is around 50*512 cycles. This proves that the long latency is not caused by the time measurement (because time measurement can cause at most 50 cycle latency.). 
+
+---
+3) After discussing with Yuanfeng about my problem, I knew he used stack to allocate space for the array but I used heap to allocate space. In order to make sure the problem is not caused by heap, I change the array allocation to malloc() to unsigned long array[size] and the compiling parameter "-mpreferred-stack-boundary=12" to allign the stack with page. 
+    (file: sender4.c receiver4.c)
+    
+    Result: It still has the same problem as method 2). When I compile the program and run it at the first time, the "hit" latency of receiver4 is reduced to around 12~20cycles which is reasonable. But after several rounds of run, the latency becomes exactly the same with method 2). 
+
+---
+4) I tried the above three cache methods to try to get the covert channel, neither of them works. Therefore, I came to use the shared filesystem to construct the covert channel.
+    (file: receiver2.c sender2.c)
+    I use the existence of a file as a "lock". I use two files for receiver2 and sender2 to construct the producer-consumer problem for synchronization and the third file to mark a bit 1 or 0. 
+
+    Result: This channel works perfectly with high bandwidth and reliability.
+    Comment: Even when the filesystem is forbidden to use, if I can find some other devices, such as I/O device, that different processes can lock and unlock, I can use the same approach to construct the covert channel.
+
+===
+Summary
+1) None of my three methods of using L1 data cache as the covert channel really works, although they should work in theory. 
+2) The method of using shared filesystem works.
+3) I will keep looking at the covert channel and try to make all of the three methods work during this semester. 
 
 
-receiver2.c
-
-
-receiver3.c
-use heap malloc to get array
-always L1 data cache miss when access same array item
-The repeated access of the same array item is 50cycles
-
-receiver4.c
-Use stack to get array, array[size];
-
+===
+How to compile and run
+---
+Compile
+type `make`
+---
+Run
+Method 1-3 has to simultaneously run the receiver and sender on the same core but different hyperthreads.
+Method 4 which uses filesystem has to delete *.tmp to run. They can run on different cores without simulatneously start.
