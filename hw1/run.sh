@@ -1,3 +1,3 @@
 #!/bin/bash
-taskset 0 ./sender &
-taskset 1 ./receiver 
+taskset -c 0 ./sender3 &
+taskset -c 1 ./receiver3 

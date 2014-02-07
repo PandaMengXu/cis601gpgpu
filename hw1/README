@@ -1,0 +1,14 @@
+receiver.c
+
+
+receiver2.c
+
+
+receiver3.c
+use heap malloc to get array
+always L1 data cache miss when access same array item
+The repeated access of the same array item is 50cycles
+
+receiver4.c
+Use stack to get array, array[size];
+
