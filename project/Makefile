@@ -9,5 +9,9 @@ cpu_busy: cpu_busy.cc
 cpu_latency_boxplot_cpuindex: cpu_latency_boxplot_cpuindex.cc
 	g++ -g -o $@ $^
 
+cach_latency_size_boxplot: cache_latency_size_boxplot.cc
+	g++ -g -O0 -o $@ $^
+    
+
 clean:
-	rm cpu_latency_boxplot cache_latency_size_boxplot cpu_latency_boxplot_cpuindex
+	rm cpu_latency_boxplot cache_latency_size_boxplot cpu_latency_boxplot_cpuindex cache_latency_size_boxplot
