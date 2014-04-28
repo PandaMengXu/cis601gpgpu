@@ -6,15 +6,15 @@ fontname = 'Arial';
 linewidth = 2;
 headerLinesIn = 1;
 % 
- cpuOrCache = 'cpu';
- programParam = '100_10';
+cpuOrCache = 'cpu';
+programParam = '100_10';
 %cpuOrCache = 'cache';
 %programParam = '12288_100_30000';
 
 boxplot_data = [];
 boxplot_group = [];
-
-for i = 1:1:8
+j = 1;
+for i = 1:1:10
     if i == 1
         data_filename = sprintf('%s/%s_alone_d1v1_%s.data', rootPath, cpuOrCache, programParam);
         boxplot_label = 'alone-d1v1';
@@ -25,20 +25,34 @@ for i = 1:1:8
         data_filename = sprintf('%s/%s_together_d1v1_d2v1_pinsamecore_%s.data', rootPath, cpuOrCache, programParam);
         boxplot_label = 'd1v1d2v1-pinsamecore';
     elseif i == 4
+        if strcmp(cpuOrCache, 'cpu')
+            continue;
+        else
+            data_filename = sprintf('%s/%s_together_d1v1_d2v1_pindiffcore_%s.data', rootPath, cpuOrCache, programParam);
+            boxplot_label = 'd1v1d2v1-pindiffcore';
+        end
+    elseif i == 5
         data_filename = sprintf('%s/%s_together_d1v5_d2v1_nopin_%s.data', rootPath, cpuOrCache, programParam);
         boxplot_label = 'd1v5d2v1-nopin';
-    elseif i == 5
+    elseif i == 6
         data_filename = sprintf('%s/HT_%s_alone_d1v1_%s.data', rootPath, cpuOrCache, programParam);
         boxplot_label = 'HT-alone-d1v1';
-    elseif i == 6
+    elseif i == 7
         data_filename = sprintf('%s/HT_%s_together_d1v1_d2v1_nopin_%s.data', rootPath, cpuOrCache, programParam);
         boxplot_label = 'HT-d1v1d2v1-nopin';
-    elseif i == 7
+    elseif i == 8
         data_filename = sprintf('%s/HT_%s_together_d1v1_d2v1_pinsamecore_%s.data', rootPath, cpuOrCache, programParam);
         boxplot_label = 'HT-d1v1d2v1-pinsamecore';
-    elseif i == 8
+    elseif i == 9
         data_filename = sprintf('%s/HT_%s_together_d1v5_d2v1_nopin_%s.data', rootPath, cpuOrCache, programParam);
         boxplot_label = 'HT-d1v5d2v1-nopin';
+    elseif i == 10
+        if strcmp(cpuOrCache, 'cpu')
+            continue;
+        else
+            data_filename = sprintf('%s/HT_%s_together_d1v1_d2v1_pindiffcore_%s.data', rootPath, cpuOrCache, programParam);
+            boxplot_label = 'HT-d1v1d2v1-pindiffcore';
+        end
     end
     
     data = load(data_filename);
@@ -53,7 +67,8 @@ for i = 1:1:8
         display('ERR:cpuOrCache has to be cpu or cache!');
     end
     
-    boxplot_labels{i} = boxplot_label;
+    boxplot_labels{j} = boxplot_label;
+    j = j + 1;
 end
 
 fig = figure;
@@ -61,7 +76,7 @@ boxplot(boxplot_data, boxplot_group, 'Labels', boxplot_labels, 'labelorientation
 
 title_name = sprintf('Decision with %s resource', cpuOrCache);
 title(title_name);
-f_pdf = sprintf('%s/boxplot_%s', rootPath, cpuOrCache);
+f_pdf = sprintf('%s/boxplot_%s_v2', rootPath, cpuOrCache);
 saveas(fig,f_pdf,'pdf');
 %set(gca,'XTickLabel',{' '})
 %set(gca,'XTickLabel',boxplot_labels);
