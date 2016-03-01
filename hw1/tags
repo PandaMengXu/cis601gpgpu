@@ -1,0 +1,33 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.8	//
+ARRAY_EFFECTIVE_LENGTH	polute.c	6;"	d	file:
+ARRAY_EFFECTIVE_LENGTH	receiver.c	8;"	d	file:
+ARRAY_EFFECTIVE_LENGTH	sender.c	8;"	d	file:
+ARRAY_LENGTH	polute.c	5;"	d	file:
+ARRAY_LENGTH	receiver.c	7;"	d	file:
+ARRAY_LENGTH	sender.c	7;"	d	file:
+BITS_WIDTH	sender.c	14;"	d	file:
+BUFFER_LENGTH	sender.c	15;"	d	file:
+ELMT_PER_LINE	polute.c	10;"	d	file:
+ELMT_PER_LINE	receiver.c	12;"	d	file:
+ELMT_PER_LINE	sender.c	12;"	d	file:
+LINE_NUM	polute.c	9;"	d	file:
+LINE_NUM	receiver.c	11;"	d	file:
+LINE_NUM	sender.c	11;"	d	file:
+SET_NUM	polute.c	8;"	d	file:
+SET_NUM	receiver.c	10;"	d	file:
+SET_NUM	sender.c	10;"	d	file:
+get_array_index	receiver.c	/^static inline int get_array_index(int set, int line)$/;"	f	file:
+get_array_index	sender.c	/^static inline int get_array_index(int set, int line)$/;"	f	file:
+get_elapsed_usec	receiver.c	/^static inline long get_elapsed_usec(struct timeval before, struct timeval after)$/;"	f	file:
+get_rand_char	sender.c	/^static inline char get_rand_char()$/;"	f	file:
+main	polute.c	/^void main()$/;"	f
+main	receiver.c	/^void main()$/;"	f
+main	sender.c	/^void main()$/;"	f
+miss_hit_ratio_manual	receiver.c	/^float miss_hit_ratio_manual = 2.2;$/;"	v
+send_bit_0	sender.c	/^static inline void send_bit_0(int bit_index, unsigned long* array)$/;"	f	file:
+send_bit_1	sender.c	/^static inline void send_bit_1(int bit_index, unsigned long* array)$/;"	f	file:
