@@ -69,8 +69,8 @@ __global__ void blurGlobal(cudaPitchedPtr src, cudaPitchedPtr dst, float* gaussi
 /** Compute a Gaussian blur of src image and place into dst. Use only global memory. */
 __global__ void blurGlobalPart1(cudaPitchedPtr src, cudaPitchedPtr dst, float* gaussian) {
 
-	int x = (blockDim.x * blockIdx.x) + threadIdx.y;
-	int y = (blockDim.y * blockIdx.y) + threadIdx.x;
+	int x = (blockDim.x * blockIdx.x) + threadIdx.x;
+	int y = (blockDim.y * blockIdx.y) + threadIdx.y;
 
 	float r = 0.0, g = 0.0, b = 0.0;
 
@@ -97,13 +97,32 @@ __global__ void blurGlobalPart1(cudaPitchedPtr src, cudaPitchedPtr dst, float* g
 }
 
 
-/** Compute a Gaussian blur of src image and place into dst. Use only global memory. */
+/** Compute a Gaussian blur of src image and place into dst. Use shared memory for gaussian filter. */
 __global__ void blurGlobalPart2(cudaPitchedPtr src, cudaPitchedPtr dst, float* gaussian) {
 
-	int x = (blockDim.x * blockIdx.x) + threadIdx.y;
-	int y = (blockDim.y * blockIdx.y) + threadIdx.x;
+	int x = (blockDim.x * blockIdx.x) + threadIdx.x;
+	int y = (blockDim.y * blockIdx.y) + threadIdx.y;
 
 	float r = 0.0, g = 0.0, b = 0.0;
+
+	// code is refered to http://stackoverflow.com/questions/15468059/copy-to-the-shared-memory-in-cuda
+	__shared__ float buffer[FILTER_SIZE][FILTER_SIZE];
+
+	if (threadIdx.x < FILTER_SIZE && threadIdx.y < FILTER_SIZE)
+	{
+		buffer[threadIdx.y][threadIdx.x] = gaussian[(threadIdx.y * FILTER_SIZE) + threadIdx.x];
+	}
+
+	/* The commented out code slow down the program, compared to soluation of Part 1*/
+	/*if (threadIdx.x == 0 && threadIdx.y == 0)
+	{
+		for (int ky = 0; ky < FILTER_SIZE; ky++) {
+			for (int kx = 0; kx < FILTER_SIZE; kx++) {
+				buffer[ky][kx] = gaussian[(ky * FILTER_SIZE) + kx];
+			}
+		}
+	}*/
+	__syncthreads();
 
 	for (int ky = 0; ky < FILTER_SIZE; ky++) {
 		for (int kx = 0; kx < FILTER_SIZE; kx++) {
@@ -113,7 +132,7 @@ __global__ void blurGlobalPart2(cudaPitchedPtr src, cudaPitchedPtr dst, float* g
 				clamp(y + ky - FILTER_RADIUS, src.ysize), src);
 			unsigned int pixel = ((int*)src.ptr)[i];
 			// convolute each channel separately
-			const float k = gaussian[(ky * FILTER_SIZE) + kx];
+			const float k = buffer[ky][kx];
 			b += (float)((pixel & BLUE_MASK) >> 16) * k;
 			g += (float)((pixel & GREEN_MASK) >> 8) * k;
 			r += (float)((pixel & RED_MASK)) * k;
@@ -128,23 +147,108 @@ __global__ void blurGlobalPart2(cudaPitchedPtr src, cudaPitchedPtr dst, float* g
 }
 
 
-/** Compute a Gaussian blur of src image and place into dst. Use only global memory. */
+/** Compute a Gaussian blur of src image and place into dst. Use shared memory for gaussian filter and input pixels. */
 __global__ void blurGlobalPart3(cudaPitchedPtr src, cudaPitchedPtr dst, float* gaussian) {
 
-	int x = (blockDim.x * blockIdx.x) + threadIdx.y;
-	int y = (blockDim.y * blockIdx.y) + threadIdx.x;
+	int x = (blockDim.x * blockIdx.x) + threadIdx.x;
+	int y = (blockDim.y * blockIdx.y) + threadIdx.y;
+
+	int px_init = (blockDim.x * blockIdx.x) - FILTER_RADIUS;
+	int py_init = (blockDim.y * blockIdx.y) - FILTER_RADIUS;
+
+	int x_prime, y_prime; // the axis of x and y in the new coordinate system that uses (px_init, py_init) as (0, 0)
 
 	float r = 0.0, g = 0.0, b = 0.0;
+
+	int i;
+	unsigned int pixel;
+
+	// code is refered to http://stackoverflow.com/questions/15468059/copy-to-the-shared-memory-in-cuda
+	__shared__ float buffer[FILTER_SIZE][FILTER_SIZE];
+	__shared__ float pixelBuffer[BLOCKDIM + FILTER_SIZE][BLOCKDIM + FILTER_SIZE];
+
+	if (threadIdx.x < FILTER_SIZE && threadIdx.y < FILTER_SIZE)
+	{
+		buffer[threadIdx.y][threadIdx.x] = gaussian[(threadIdx.y * FILTER_SIZE) + threadIdx.x];
+	}
+
+	//__syncthreads();
+
+	// copy pixels from global mem to shared mem, for the main pixels
+	x_prime = x - px_init;
+	y_prime = y - py_init;
+	i = index(clamp(x, src.xsize / 4), clamp(y, src.ysize), src);
+	pixel = ((int*)src.ptr)[i];
+	pixelBuffer[y_prime][x_prime] = pixel;
+
+	// copy pixels from global mem to shared mem, for the filter pixels
+	// first do the 4 edge parts
+	//east side
+	if (threadIdx.x < FILTER_RADIUS) // left columns
+	{
+		i = index(clamp(x - FILTER_RADIUS, src.xsize / 4), clamp(y, src.ysize), src);
+		pixel = ((int*)src.ptr)[i];
+		pixelBuffer[y_prime][x_prime - FILTER_RADIUS] = pixel;
+	}
+	//west side
+	if (threadIdx.x >= (blockDim.x - FILTER_RADIUS))
+	{
+		i = index(clamp(x + 1 + FILTER_RADIUS, src.xsize / 4), clamp(y, src.ysize), src);
+		pixel = ((int*)src.ptr)[i];
+		pixelBuffer[y_prime][x_prime + 1 + FILTER_RADIUS] = pixel;
+	}
+	//sourth side
+	if (threadIdx.y < FILTER_RADIUS)
+	{
+		i = index(clamp(x, src.xsize / 4), clamp(y - FILTER_RADIUS, src.ysize), src);
+		pixel = ((int*)src.ptr)[i];
+		pixelBuffer[y_prime - FILTER_RADIUS][x_prime] = pixel;
+	}
+	//north side
+	if (threadIdx.y >= (blockDim.y - FILTER_RADIUS))
+	{
+		i = index(clamp(x, src.xsize / 4), clamp(y + 1 + FILTER_RADIUS, src.ysize), src);
+		pixel = ((int*)src.ptr)[i];
+		pixelBuffer[y_prime + 1 + FILTER_RADIUS][x_prime] = pixel;
+	}
+	// then handle the four corner pixels for gaussian
+	// southeast corner
+ 	if (threadIdx.x < FILTER_RADIUS && threadIdx.y < FILTER_RADIUS)
+	{
+		i = index(clamp(x - FILTER_RADIUS, src.xsize / 4), clamp(y - FILTER_RADIUS, src.ysize), src);
+		pixel = ((int*)src.ptr)[i];
+		pixelBuffer[y - FILTER_RADIUS - py_init][x - FILTER_RADIUS - px_init] = pixel;
+	}
+	// southwest corner
+	if (threadIdx.x >= (blockDim.x - FILTER_RADIUS) && threadIdx.y < FILTER_RADIUS)
+	{
+		i = index(clamp(x + 1 + FILTER_RADIUS, src.xsize / 4), clamp(y - FILTER_RADIUS, src.ysize), src);
+		pixel = ((int*)src.ptr)[i];
+		pixelBuffer[y - FILTER_RADIUS - py_init][x + 1 + FILTER_RADIUS - px_init] = pixel;
+	}
+	//northeast corner
+	if (threadIdx.x < FILTER_RADIUS && threadIdx.y >= (blockDim.y - FILTER_RADIUS))
+	{
+		i = index(clamp(x - FILTER_RADIUS, src.xsize / 4), clamp(y + 1 + FILTER_RADIUS, src.ysize), src);
+		pixel = ((int*)src.ptr)[i];
+		pixelBuffer[y + 1 + FILTER_RADIUS - py_init][x - FILTER_RADIUS - px_init] = pixel;
+	}
+	//northwest corner
+	if (threadIdx.x >= (blockDim.x - FILTER_RADIUS) && threadIdx.y >= (blockDim.y - FILTER_RADIUS))
+	{
+		i = index(clamp(x + 1 + FILTER_RADIUS, src.xsize / 4), clamp(y + 1 + FILTER_RADIUS, src.ysize), src);
+		pixel = ((int*)src.ptr)[i];
+		pixelBuffer[y + 1 + FILTER_RADIUS - py_init][x + 1 + FILTER_RADIUS - px_init] = pixel;
+	}
+
+	__syncthreads();
 
 	for (int ky = 0; ky < FILTER_SIZE; ky++) {
 		for (int kx = 0; kx < FILTER_SIZE; kx++) {
 			// this replicates border pixels
-			// why src.xsize /4? is it because xsize is in bytpes and each elem is 32 bits?
-			int i = index(clamp(x + kx - FILTER_RADIUS, src.xsize / 4),
-				clamp(y + ky - FILTER_RADIUS, src.ysize), src);
-			unsigned int pixel = ((int*)src.ptr)[i];
+			unsigned int pixel = pixelBuffer[y_prime + ky - FILTER_RADIUS][x_prime + kx - FILTER_RADIUS];
 			// convolute each channel separately
-			const float k = gaussian[(ky * FILTER_SIZE) + kx];
+			const float k = buffer[ky][kx];
 			b += (float)((pixel & BLUE_MASK) >> 16) * k;
 			g += (float)((pixel & GREEN_MASK) >> 8) * k;
 			r += (float)((pixel & RED_MASK)) * k;
@@ -157,7 +261,6 @@ __global__ void blurGlobalPart3(cudaPitchedPtr src, cudaPitchedPtr dst, float* g
 		| (((int)r) & RED_MASK);
 	((int*)dst.ptr)[index(x, y, dst)] = dpixel;
 }
-
 
 
 void setupGaussian(float** d_gaussian) {
@@ -214,11 +317,11 @@ int main(int argc, char* argv[]) {
 
 	char smallInput[] = "C:\\Users\\Administrator\\Source\\Repos\\cis601\\hw1\\steel_wool_small.jpg";
 	char largeInput[] = "C:\\Users\\Administrator\\Source\\Repos\\cis601\\hw1\\steel_wool_large.jpg";
-	char smallOutput[] = "C:\\Users\\Administrator\\Source\\Repos\\cis601\\hw1\\output_small.jpg";
-	char largeOutput[] = "C:\\Users\\Administrator\\Source\\Repos\\cis601\\hw1\\output_large.jpg";
+	char smallOutput[] = "C:\\Users\\Administrator\\Source\\Repos\\cis601\\hw1\\output_small";
+	char largeOutput[] = "C:\\Users\\Administrator\\Source\\Repos\\cis601\\hw1\\output_large";
 	int kernelSelection = 0;
 	char *input;
-	char *output;
+	char *output = (char *)malloc(sizeof(largeOutput) + 10);
 
 	//INPUT FIGURE PATH
 	if (argc < 3)
@@ -230,12 +333,12 @@ int main(int argc, char* argv[]) {
 	if (!strcmp(argv[2], "small"))
 	{
 		input = smallInput;
-		output = smallOutput;
+		sprintf(output, "%s.%d.jpg\0", smallOutput, kernelSelection);
 	}
 	else if (!strcmp(argv[2], "large"))
 	{
 		input = largeInput;
-		output = largeOutput;
+		sprintf(output, "%s.%d.jpg\0", largeOutput, kernelSelection);
 	}
 	printf("[INFO] kernelSelection=%d input=%s output=%s\n", kernelSelection, input, output);
 
@@ -357,7 +460,7 @@ int main(int argc, char* argv[]) {
 			imgPixel[0] = (c >> 16) & 0xFF;
 		}
 	}
-	img.Save("C:\\Users\\Administrator\\Source\\Repos\\cis601\\hw1\\out.jpg");
+	img.Save(output);
 
 	// CLEANUP
 
