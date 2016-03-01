@@ -46,6 +46,100 @@ __global__ void blurGlobal(cudaPitchedPtr src, cudaPitchedPtr dst, float* gaussi
 	for (int ky = 0; ky < FILTER_SIZE; ky++) {
 		for (int kx = 0; kx < FILTER_SIZE; kx++) {
 			// this replicates border pixels
+			// why src.xsize /4? is it because xsize is in bytpes and each elem is 32 bits?
+			int i = index(clamp(x + kx - FILTER_RADIUS, src.xsize / 4),
+				clamp(y + ky - FILTER_RADIUS, src.ysize), src);
+			unsigned int pixel = ((int*)src.ptr)[i];
+			// convolute each channel separately
+			const float k = gaussian[(ky * FILTER_SIZE) + kx];
+			b += (float)((pixel & BLUE_MASK) >> 16) * k;
+			g += (float)((pixel & GREEN_MASK) >> 8) * k;
+			r += (float)((pixel & RED_MASK)) * k;
+		}
+	}
+	// Re-assemble destination pixel
+	unsigned int dpixel = 0x00000000
+		| ((((int)b) << 16) & BLUE_MASK)
+		| ((((int)g) << 8) & GREEN_MASK)
+		| (((int)r) & RED_MASK);
+	((int*)dst.ptr)[index(x, y, dst)] = dpixel;
+}
+
+
+/** Compute a Gaussian blur of src image and place into dst. Use only global memory. */
+__global__ void blurGlobalPart1(cudaPitchedPtr src, cudaPitchedPtr dst, float* gaussian) {
+
+	int x = (blockDim.x * blockIdx.x) + threadIdx.y;
+	int y = (blockDim.y * blockIdx.y) + threadIdx.x;
+
+	float r = 0.0, g = 0.0, b = 0.0;
+
+	for (int ky = 0; ky < FILTER_SIZE; ky++) {
+		for (int kx = 0; kx < FILTER_SIZE; kx++) {
+			// this replicates border pixels
+			// why src.xsize /4? is it because xsize is in bytpes and each elem is 32 bits?
+			int i = index(clamp(x + kx - FILTER_RADIUS, src.xsize / 4),
+				clamp(y + ky - FILTER_RADIUS, src.ysize), src);
+			unsigned int pixel = ((int*)src.ptr)[i];
+			// convolute each channel separately
+			const float k = gaussian[(ky * FILTER_SIZE) + kx];
+			b += (float)((pixel & BLUE_MASK) >> 16) * k;
+			g += (float)((pixel & GREEN_MASK) >> 8) * k;
+			r += (float)((pixel & RED_MASK)) * k;
+		}
+	}
+	// Re-assemble destination pixel
+	unsigned int dpixel = 0x00000000
+		| ((((int)b) << 16) & BLUE_MASK)
+		| ((((int)g) << 8) & GREEN_MASK)
+		| (((int)r) & RED_MASK);
+	((int*)dst.ptr)[index(x, y, dst)] = dpixel;
+}
+
+
+/** Compute a Gaussian blur of src image and place into dst. Use only global memory. */
+__global__ void blurGlobalPart2(cudaPitchedPtr src, cudaPitchedPtr dst, float* gaussian) {
+
+	int x = (blockDim.x * blockIdx.x) + threadIdx.y;
+	int y = (blockDim.y * blockIdx.y) + threadIdx.x;
+
+	float r = 0.0, g = 0.0, b = 0.0;
+
+	for (int ky = 0; ky < FILTER_SIZE; ky++) {
+		for (int kx = 0; kx < FILTER_SIZE; kx++) {
+			// this replicates border pixels
+			// why src.xsize /4? is it because xsize is in bytpes and each elem is 32 bits?
+			int i = index(clamp(x + kx - FILTER_RADIUS, src.xsize / 4),
+				clamp(y + ky - FILTER_RADIUS, src.ysize), src);
+			unsigned int pixel = ((int*)src.ptr)[i];
+			// convolute each channel separately
+			const float k = gaussian[(ky * FILTER_SIZE) + kx];
+			b += (float)((pixel & BLUE_MASK) >> 16) * k;
+			g += (float)((pixel & GREEN_MASK) >> 8) * k;
+			r += (float)((pixel & RED_MASK)) * k;
+		}
+	}
+	// Re-assemble destination pixel
+	unsigned int dpixel = 0x00000000
+		| ((((int)b) << 16) & BLUE_MASK)
+		| ((((int)g) << 8) & GREEN_MASK)
+		| (((int)r) & RED_MASK);
+	((int*)dst.ptr)[index(x, y, dst)] = dpixel;
+}
+
+
+/** Compute a Gaussian blur of src image and place into dst. Use only global memory. */
+__global__ void blurGlobalPart3(cudaPitchedPtr src, cudaPitchedPtr dst, float* gaussian) {
+
+	int x = (blockDim.x * blockIdx.x) + threadIdx.y;
+	int y = (blockDim.y * blockIdx.y) + threadIdx.x;
+
+	float r = 0.0, g = 0.0, b = 0.0;
+
+	for (int ky = 0; ky < FILTER_SIZE; ky++) {
+		for (int kx = 0; kx < FILTER_SIZE; kx++) {
+			// this replicates border pixels
+			// why src.xsize /4? is it because xsize is in bytpes and each elem is 32 bits?
 			int i = index(clamp(x + kx - FILTER_RADIUS, src.xsize / 4),
 				clamp(y + ky - FILTER_RADIUS, src.ysize), src);
 			unsigned int pixel = ((int*)src.ptr)[i];
@@ -116,11 +210,39 @@ float stopTimer() {
 	return time;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+
+	char smallInput[] = "C:\\Users\\Administrator\\Source\\Repos\\cis601\\hw1\\steel_wool_small.jpg";
+	char largeInput[] = "C:\\Users\\Administrator\\Source\\Repos\\cis601\\hw1\\steel_wool_large.jpg";
+	char smallOutput[] = "C:\\Users\\Administrator\\Source\\Repos\\cis601\\hw1\\output_small.jpg";
+	char largeOutput[] = "C:\\Users\\Administrator\\Source\\Repos\\cis601\\hw1\\output_large.jpg";
+	int kernelSelection = 0;
+	char *input;
+	char *output;
+
+	//INPUT FIGURE PATH
+	if (argc < 3)
+	{
+		printf("[Usage] program kernel_selection(0/1/2/3) input_size(small/large)");
+		exit(1);
+	}
+	kernelSelection = atoi(argv[1]);
+	if (!strcmp(argv[2], "small"))
+	{
+		input = smallInput;
+		output = smallOutput;
+	}
+	else if (!strcmp(argv[2], "large"))
+	{
+		input = largeInput;
+		output = largeOutput;
+	}
+	printf("[INFO] kernelSelection=%d input=%s output=%s\n", kernelSelection, input, output);
 
 	// LOAD IMAGE FROM FILE
 	CImage img;
-	img.Load("C:\\Users\\Administrator\\Source\\Repos\\cis601\\hw1\\steel_wool_large.jpg");
+	//img.Load("C:\\Users\\Administrator\\Source\\Repos\\cis601\\hw1\\steel_wool_small.jpg");
+	img.Load(input);
 
 	// ensure that image dimensions are a multiple of the block size
 	if (img.GetHeight() % BLOCKDIM != 0) {
@@ -186,7 +308,23 @@ int main() {
 		startTimer();
 		dim3 blocksInGrid(img.GetWidth() / BLOCKDIM, img.GetHeight() / BLOCKDIM);
 		dim3 threadsPerBlock(BLOCKDIM, BLOCKDIM);
-		blurGlobal<<<blocksInGrid, threadsPerBlock>>>(d_src, d_dst, d_gaussian);
+		if ( kernelSelection == 0 )
+		{ 
+			blurGlobal << <blocksInGrid, threadsPerBlock >> >(d_src, d_dst, d_gaussian);
+		}
+		else if (kernelSelection == 1)
+		{
+			blurGlobalPart1 << <blocksInGrid, threadsPerBlock >> >(d_src, d_dst, d_gaussian);
+		}
+		else if (kernelSelection == 2)
+		{
+			blurGlobalPart2 << <blocksInGrid, threadsPerBlock >> >(d_src, d_dst, d_gaussian);
+		}
+		else if (kernelSelection == 3)
+		{
+			blurGlobalPart3 << <blocksInGrid, threadsPerBlock >> >(d_src, d_dst, d_gaussian);
+		}
+
 
 		// Check for any errors launching the kernel
 		cudaStatus = cudaGetLastError();
